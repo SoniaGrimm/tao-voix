@@ -1,0 +1,41 @@
+// /api/whisper.js
+export const config = { api: { bodyParser: false } };
+
+import formidable from "formidable";
+import fs from "fs";
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") return res.status(405).send("Method not allowed");
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+  if (!OPENAI_API_KEY) return res.status(500).send("Missing OPENAI_API_KEY");
+
+  const form = formidable({ multiples: false });
+  const { fields, files } = await new Promise((resolve, reject) => {
+    form.parse(req, (err, fields, files) => err ? reject(err) : resolve({ fields, files }));
+  });
+
+  const audio = files.audio;
+  if (!audio) return res.status(400).send("No audio");
+  const lang = fields.language || "fr";
+
+  try {
+    const fetch = (await import("node-fetch")).default;
+    const stream = fs.createReadStream(audio.filepath);
+    const formData = new (await import("form-data")).default();
+    formData.append("file", stream, { filename: "speech.webm", contentType: audio.mimetype || "audio/webm" });
+    formData.append("model", "whisper-1");
+    formData.append("language", lang);
+
+    const r = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+      body: formData
+    });
+    if (!r.ok) return res.status(500).send(await r.text());
+    const data = await r.json();
+    return res.status(200).json({ text: data.text });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).send("Server error");
+  }
+}
