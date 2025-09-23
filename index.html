@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TAO – Chat Voix (Whisper + Unreal + Voiceflow)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 0; background: #f6f7fb; color: #111827; }
+    header { background: white; padding: 12px 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); position: sticky; top: 0; z-index: 10; }
+    .container { max-width: 920px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .card { background: white; border-radius: 14px; box-shadow: 0 1px 8px rgba(0,0,0,0.06); padding: 12px; margin-top: 12px; }
+    label { font-size: 12px; color: #374151; display: block; margin-bottom: 6px; }
+    input[type="text"], input[type="password"] { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #e5e7eb; font-size: 14px; }
+    button { border: 0; border-radius: 999px; padding: 10px 16px; font-weight: 600; cursor: pointer; }
+    button.primary { background: #2563eb; color: white; }
+    button.muted { background: #eef2ff; color: #3730a3; }
+    button.warning { background: #f59e0b; color: #111827; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .chat { height: 440px; overflow-y: auto; padding: 10px; background: #fafafa; border-radius: 12px; border: 1px solid #eee; }
+    .msg { margin: 8px 0; display: flex; gap: 10px; align-items: flex-start; }
+    .msg .bubble { padding: 10px 12px; border-radius: 12px; max-width: 72%; white-space: pre-wrap; }
+    .user .bubble { background: #2563eb; color: white; margin-left: auto; }
+    .bot .bubble { background: #f3f4f6; color: #111827; margin-right: auto; }
+    .tiny { font-size: 12px; color: #6b7280; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #dcfce7; color: #065f46; }
+    audio { width: 100%; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container row" style="justify-content: space-between;">
+      <div>
+        <h1>TAO – Chat Voix (Whisper + Unreal Speech + Voiceflow)</h1>
+        <div class="tiny">Compatible tous navigateurs (micro + audio via backend). Démo éducative.</div>
+      </div>
+      <div class="row">
+        <span class="pill">Prêt à tester</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="card">
+      <h2 style="margin-top:0">⚙️ Paramètres</h2>
+      <div class="tiny">ID enfant (facultatif). Les clés API seront côté serveur.</div>
+      <div class="row">
+        <div style="flex:1">
+          <label>ID enfant</label>
+          <input id="userId" type="text" placeholder="enfant_001" value="enfant_001" />
+        </div>
+        <div style="flex:1">
+          <label>Nom (affichage)</label>
+          <input id="displayName" type="text" placeholder="Prénom" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">🗣️ Commandes</h2>
+      <div class="row">
+        <button id="btnStart" class="primary">🚀 Démarrer la session</button>
+        <button id="btnTalk" class="muted" disabled>🎤 Parler</button>
+        <button id="btnMute" class="muted" disabled>🔇 Son: OFF</button>
+        <button id="btnReset" class="warning" disabled>♻️ Réinitialiser</button>
+      </div>
+      <div class="tiny">“Parler” enregistre une phrase → Whisper transcrit → Voiceflow répond → Unreal lit la réponse. Tu peux aussi écrire.</div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-top:0">💬 Chat</h2>
+      <div id="chat" class="chat"></div>
+      <div class="row" style="margin-top:8px;">
+        <input id="textInput" type="text" placeholder="Écris ta question… (ou utilise 🎤 Parler)" style="flex:1" />
+        <button id="btnSend" class="primary" disabled>Envoyer</button>
+      </div>
+      <audio id="player" controls></audio>
+    </div>
+
+    <div class="tiny" style="margin-top:8px;">
+      Intégration : via un <em>Embed</em> Wix ou Webview Adalo vers l’URL (quand on aura déployé).
+    </div>
+  </div>
+
+  <script>
+    const el = id => document.getElementById(id);
+    const chat = el('chat');
+    const player = el('player');
+    let muted = true;
+    let userId = "enfant_001";
+
+    function addMsg(role, text) {
+      const wrap = document.createElement('div');
+      wrap.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = text;
+      wrap.appendChild(bubble);
+      chat.appendChild(wrap);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    // --- Enregistrement court, compatible Safari/Chrome ---
+    async function recordOnceMs(ms = 4000) {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      let mime = 'audio/webm';
+      if (!MediaRecorder.isTypeSupported(mime)) {
+        mime = 'audio/mp4';
+        if (!MediaRecorder.isTypeSupported(mime)) mime = '';
+      }
+      const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      const chunks = [];
+      return new Promise(resolve => {
+        recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = () => {
+          const type = mime || (chunks[0] && chunks[0].type) || 'audio/mp4';
+          const blob = new Blob(chunks, { type });
+          stream.getTracks().forEach(t => t.stop());
+          resolve(blob);
+        };
+        recorder.start();
+        setTimeout(() => recorder.stop(), ms);
+      });
+    }
+
+    async function sendToWhisper(audioBlob) {
+      const fd = new FormData();
+      fd.append('audio', audioBlob, 'speech.webm');
+      fd.append('language', 'fr');
+      fd.append('userId', userId);
+      const res = await fetch('/api/whisper', { method: 'POST', body: fd });
+      if (!res.ok) { console.error('Whisper error', await res.text()); return null; }
+      const data = await res.json();
+      return data.text || null;
+    }
+
+    async function sendToVoiceflow(text) {
+      const res = await fetch('/api/vf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, text })
+      });
+      if (!res.ok) { console.error('VF error', await res.text()); return []; }
+      const data = await res.json();
+      return data;
+    }
+
+    async function speakUnreal(text) {
+      if (muted) return;
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      if (!res.ok) { console.error('TTS error', await res.text()); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      player.src = url;
+      await player.play();
+    }
+
+    async function handleUserText(text) {
+      addMsg('user', text);
+      const replies = await sendToVoiceflow(text);
+      if (!replies || !replies.length) return;
+      const joined = replies.join('\n');
+      addMsg('bot', joined);
+      await speakUnreal(joined);
+    }
+
+    el('btnStart').addEventListener('click', async () => {
+      userId = el('userId').value.trim() || ('u_' + Math.random().toString(36).slice(2,8));
+      el('btnTalk').disabled = false;
+      el('btnSend').disabled = false;
+      el('btnReset').disabled = false;
+      el('btnMute').disabled = false;
+      addMsg('bot', "Bonjour ! Je suis TAO. Clique 🎤 pour parler ou écris en bas.");
+      // Optionnel : message de lancement
+      const replies = await sendToVoiceflow('__LAUNCH__');
+      if (replies && replies.length) {
+        const joined = replies.join('\n');
+        addMsg('bot', joined);
+        await speakUnreal(joined);
+      }
+    });
+
+    el('btnTalk').addEventListener('click', async () => {
+      addMsg('bot', "🎤 J'écoute… parle maintenant (4 secondes).");
+      try {
+        const blob = await recordOnceMs(4000);
+        const text = await sendToWhisper(blob);
+        if (!text) { addMsg('bot', "Je n'ai rien compris. Réessaie ?"); return; }
+        await handleUserText(text);
+      } catch (e) {
+        console.error(e);
+        addMsg('bot', "Micro indisponible. Vérifie les permissions.");
+      }
+    });
+
+    el('btnSend').addEventListener('click', async () => {
+      const val = el('textInput').value.trim();
+      el('textInput').value = '';
+      if (!val) return;
+      await handleUserText(val);
+    });
+
+    el('btnMute').addEventListener('click', () => {
+      muted = !muted;
+      el('btnMute').textContent = muted ? '🔇 Son: OFF' : '🔊 Son: ON';
+    });
+
+    el('btnReset').addEventListener('click', () => {
+      chat.innerHTML = '';
+      addMsg('bot', "Conversation réinitialisée. Clique 🚀 pour démarrer.");
+    });
+
+    addMsg('bot', "Renseigne l'ID enfant si tu veux, puis 🚀 Démarrer la session.");
+  </script>
+</body>
+</html>
