@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     const fetch = (await import("node-fetch")).default;
     const formData = new (await import("form-data")).default();
 
-    const stream = fs.createReadStream(filepath);
+   const stream = fs.createReadStream(audio.filepath || audio[0].filepath);
     formData.append("file", stream, {
       filename: "speech.webm",
       contentType: audio.mimetype || "audio/webm",
