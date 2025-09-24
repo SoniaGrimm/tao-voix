@@ -6,29 +6,34 @@ import fs from "fs";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).send("Method not allowed");
+
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
   if (!OPENAI_API_KEY) return res.status(500).send("Missing OPENAI_API_KEY");
 
   const form = formidable({ multiples: false });
   const { fields, files } = await new Promise((resolve, reject) => {
-    form.parse(req, (err, fields, files) => err ? reject(err) : resolve({ fields, files }));
+    form.parse(req, (err, fields, files) =>
+      err ? reject(err) : resolve({ fields, files })
+    );
   });
 
   const audio = files.audio;
-if (!audio) return res.status(400).send("No audio");
+  if (!audio) return res.status(400).send("No audio");
 
-const filepath = Array.isArray(audio) ? audio[0].filepath : audio.filepath;
-const stream = fs.createReadStream(filepath);
+  // 🔧 Correction : gérer array ou objet
+  const filepath = Array.isArray(audio) ? audio[0].filepath : audio.filepath;
+  if (!filepath) return res.status(400).send("No filepath for audio");
+
   const lang = fields.language || "fr";
 
   try {
     const fetch = (await import("node-fetch")).default;
-    const stream = fs.createReadStream(audio.filepath);
-
     const formData = new (await import("form-data")).default();
-    formData.append("file", stream, { 
-      filename: audio.originalFilename || "speech.mp4", 
-      contentType: audio.mimetype || "audio/mp4" 
+
+    const stream = fs.createReadStream(filepath);
+    formData.append("file", stream, {
+      filename: "speech.webm",
+      contentType: audio.mimetype || "audio/webm",
     });
     formData.append("model", "whisper-1");
     formData.append("language", lang);
@@ -36,20 +41,18 @@ const stream = fs.createReadStream(filepath);
     const r = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
       headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
-      body: formData
+      body: formData,
     });
 
     if (!r.ok) {
-      const errMsg = await r.text();
-      console.error("Whisper error:", errMsg);
-      return res.status(500).send(errMsg);
+      console.error("Whisper error:", await r.text());
+      return res.status(500).send("Whisper API error");
     }
 
     const data = await r.json();
-    console.log("Whisper result:", data);
     return res.status(200).json({ text: data.text });
   } catch (e) {
-    console.error("Whisper exception:", e);
+    console.error("Server error:", e);
     return res.status(500).send("Server error");
   }
 }
