@@ -48,8 +48,8 @@ export default async function handler(req, res) {
 
     const data = await r.json();
     return res.status(200).json({ text: data.text });
-  } catch (e) {
-    console.error("Server error:", e);
-    return res.status(500).send("Server error");
-  }
+ } catch (e) {
+  console.error("Whisper exception:", e);
+  return res.status(500).send(e.message || "Server error");
+}
 }
