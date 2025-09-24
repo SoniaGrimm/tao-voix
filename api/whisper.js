@@ -17,20 +17,27 @@ export default async function handler(req, res) {
     );
   });
 
-  // 🔧 Correction : gérer array ou objet
-  const file = Array.isArray(files.audio) ? files.audio[0] : files.audio;
-  if (!file) return res.status(400).send("No audio");
+  let audio = files.audio;
+  if (!audio) return res.status(400).send("No audio");
+
+  // si jamais audio est un tableau → prendre le premier élément
+  if (Array.isArray(audio)) {
+    audio = audio[0];
+  }
+
+  const filepath = audio.filepath;
+  if (!filepath) return res.status(400).send("No filepath for audio");
 
   const lang = fields.language || "fr";
 
   try {
     const fetch = (await import("node-fetch")).default;
-    const formData = new (await import("form-data")).default();
+    const FormData = (await import("form-data")).default;
 
-    const stream = fs.createReadStream(file.filepath);
-    formData.append("file", stream, {
+    const formData = new FormData();
+    formData.append("file", fs.createReadStream(filepath), {
       filename: "speech.webm",
-      contentType: file.mimetype || "audio/webm",
+      contentType: audio.mimetype || "audio/webm",
     });
     formData.append("model", "whisper-1");
     formData.append("language", lang);
@@ -48,8 +55,8 @@ export default async function handler(req, res) {
 
     const data = await r.json();
     return res.status(200).json({ text: data.text });
- } catch (e) {
-  console.error("Whisper exception:", e);
-  return res.status(500).send(e.message || "Server error");
-}
+  } catch (e) {
+    console.error("Server error:", e);
+    return res.status(500).send("Server error");
+  }
 }
