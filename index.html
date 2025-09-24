@@ -105,18 +105,21 @@
     // --- Enregistrement court, compatible Safari/Chrome ---
     async function recordOnceMs(ms = 4000) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Par défaut webm (Chrome/Edge)
       let mime = 'audio/webm';
+
+      // Safari ne supporte pas webm → on bascule en mp4
       if (!MediaRecorder.isTypeSupported(mime)) {
         mime = 'audio/mp4';
-        if (!MediaRecorder.isTypeSupported(mime)) mime = '';
       }
-      const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+
+      const recorder = new MediaRecorder(stream, { mimeType: mime });
       const chunks = [];
       return new Promise(resolve => {
         recorder.ondataavailable = e => chunks.push(e.data);
         recorder.onstop = () => {
-          const type = mime || (chunks[0] && chunks[0].type) || 'audio/mp4';
-          const blob = new Blob(chunks, { type });
+          const blob = new Blob(chunks, { type: mime });
           stream.getTracks().forEach(t => t.stop());
           resolve(blob);
         };
@@ -127,7 +130,9 @@
 
     async function sendToWhisper(audioBlob) {
       const fd = new FormData();
-      fd.append('audio', audioBlob, 'speech.webm');
+      // Le nom du fichier dépend du format
+      const isMp4 = audioBlob.type.includes('mp4');
+      fd.append('audio', audioBlob, isMp4 ? 'speech.mp4' : 'speech.webm');
       fd.append('language', 'fr');
       fd.append('userId', userId);
       const res = await fetch('/api/whisper', { method: 'POST', body: fd });
@@ -177,7 +182,6 @@
       el('btnReset').disabled = false;
       el('btnMute').disabled = false;
       addMsg('bot', "Bonjour ! Je suis TAO. Clique 🎤 pour parler ou écris en bas.");
-      // Optionnel : message de lancement
       const replies = await sendToVoiceflow('__LAUNCH__');
       if (replies && replies.length) {
         const joined = replies.join('\n');
