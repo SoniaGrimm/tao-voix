@@ -25,7 +25,10 @@ export default async function handler(req, res) {
       })
     });
 
-    if (!r.ok) return res.status(500).send(await r.text());
+ if (!r.ok) { 
+  console.error("TTS error", await r.text()); 
+  return; 
+}
 
     const arrayBuf = await r.arrayBuffer();
     const buf = Buffer.from(arrayBuf);
