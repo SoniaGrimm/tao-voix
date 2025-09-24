@@ -17,7 +17,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         Text: text,
-        VoiceId: "Maya", // voix FR dispo
+        VoiceId: "Maya",   // voix FR
         Bitrate: "192k",
         Speed: "1.0",
         Pitch: "1.0",
@@ -25,10 +25,13 @@ export default async function handler(req, res) {
       })
     });
 
- if (!r.ok) { 
-  console.error("TTS error", await r.text()); 
-  return; 
-}
+    console.log("TTS response status:", r.status);
+
+    if (!r.ok) {
+      const errMsg = await r.text();
+      console.error("TTS error:", errMsg);
+      return res.status(500).send(errMsg);
+    }
 
     const arrayBuf = await r.arrayBuffer();
     const buf = Buffer.from(arrayBuf);
@@ -36,7 +39,7 @@ export default async function handler(req, res) {
     res.setHeader("Cache-Control", "no-store");
     return res.status(200).send(buf);
   } catch (e) {
-    console.error(e);
+    console.error("TTS exception:", e);
     return res.status(500).send("Server error");
   }
 }
