@@ -17,12 +17,9 @@ export default async function handler(req, res) {
     );
   });
 
-  const audio = files.audio;
-  if (!audio) return res.status(400).send("No audio");
-
   // 🔧 Correction : gérer array ou objet
-  const filepath = Array.isArray(audio) ? audio[0].filepath : audio.filepath;
-  if (!filepath) return res.status(400).send("No filepath for audio");
+  const file = Array.isArray(files.audio) ? files.audio[0] : files.audio;
+  if (!file) return res.status(400).send("No audio");
 
   const lang = fields.language || "fr";
 
@@ -30,13 +27,10 @@ export default async function handler(req, res) {
     const fetch = (await import("node-fetch")).default;
     const formData = new (await import("form-data")).default();
 
-const file = Array.isArray(files.audio) ? files.audio[0] : files.audio;
-if (!file) return res.status(400).send("No audio");
-
-const stream = fs.createReadStream(file.filepath);
+    const stream = fs.createReadStream(file.filepath);
     formData.append("file", stream, {
       filename: "speech.webm",
-      contentType: audio.mimetype || "audio/webm",
+      contentType: file.mimetype || "audio/webm",
     });
     formData.append("model", "whisper-1");
     formData.append("language", lang);
