@@ -17,15 +17,11 @@ export default async function handler(req, res) {
     );
   });
 
-  let audio = files.audio;
-  if (!audio) return res.status(400).send("No audio");
+  // Toujours prendre le premier fichier si c’est un tableau
+  const file = Array.isArray(files.audio) ? files.audio[0] : files.audio;
+  if (!file) return res.status(400).send("No audio file received");
 
-  // si jamais audio est un tableau → prendre le premier élément
-  if (Array.isArray(audio)) {
-    audio = audio[0];
-  }
-
-  const filepath = audio.filepath;
+  const filepath = file.filepath;
   if (!filepath) return res.status(400).send("No filepath for audio");
 
   const lang = fields.language || "fr";
@@ -33,11 +29,11 @@ export default async function handler(req, res) {
   try {
     const fetch = (await import("node-fetch")).default;
     const FormData = (await import("form-data")).default;
-
     const formData = new FormData();
+
     formData.append("file", fs.createReadStream(filepath), {
-      filename: "speech.webm",
-      contentType: audio.mimetype || "audio/webm",
+      filename: file.originalFilename || "speech.webm",
+      contentType: file.mimetype || "audio/webm",
     });
     formData.append("model", "whisper-1");
     formData.append("language", lang);
