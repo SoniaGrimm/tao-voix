@@ -22,7 +22,10 @@ export default async function handler(req, res) {
     const fetch = (await import("node-fetch")).default;
     const stream = fs.createReadStream(audio.filepath);
     const formData = new (await import("form-data")).default();
-    formData.append("file", stream, { filename: "speech.webm", contentType: audio.mimetype || "audio/webm" });
+formData.append("file", stream, { 
+  filename: audio.originalFilename || "speech.mp4", 
+  contentType: audio.mimetype || "audio/mp4" 
+});
     formData.append("model", "whisper-1");
     formData.append("language", lang);
 
