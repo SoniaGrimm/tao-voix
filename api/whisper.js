@@ -21,11 +21,12 @@ export default async function handler(req, res) {
   try {
     const fetch = (await import("node-fetch")).default;
     const stream = fs.createReadStream(audio.filepath);
+
     const formData = new (await import("form-data")).default();
-formData.append("file", stream, { 
-  filename: audio.originalFilename || "speech.mp4", 
-  contentType: audio.mimetype || "audio/mp4" 
-});
+    formData.append("file", stream, { 
+      filename: audio.originalFilename || "speech.mp4", 
+      contentType: audio.mimetype || "audio/mp4" 
+    });
     formData.append("model", "whisper-1");
     formData.append("language", lang);
 
@@ -34,11 +35,18 @@ formData.append("file", stream, {
       headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
       body: formData
     });
-    if (!r.ok) return res.status(500).send(await r.text());
+
+    if (!r.ok) {
+      const errMsg = await r.text();
+      console.error("Whisper error:", errMsg);
+      return res.status(500).send(errMsg);
+    }
+
     const data = await r.json();
+    console.log("Whisper result:", data);
     return res.status(200).json({ text: data.text });
   } catch (e) {
-    console.error(e);
+    console.error("Whisper exception:", e);
     return res.status(500).send("Server error");
   }
 }
