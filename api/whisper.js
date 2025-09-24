@@ -15,7 +15,10 @@ export default async function handler(req, res) {
   });
 
   const audio = files.audio;
-  if (!audio) return res.status(400).send("No audio");
+if (!audio) return res.status(400).send("No audio");
+
+const filepath = Array.isArray(audio) ? audio[0].filepath : audio.filepath;
+const stream = fs.createReadStream(filepath);
   const lang = fields.language || "fr";
 
   try {
