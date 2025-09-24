@@ -1,5 +1,6 @@
 // /api/tts.js
 export default async function handler(req, res) {
+    console.log("📢 TTS endpoint called with method:", req.method);
   if (req.method !== "POST") return res.status(405).send("Method not allowed");
   const UNREAL_API_KEY = process.env.UNREAL_API_KEY;
   if (!UNREAL_API_KEY) return res.status(500).send("Missing UNREAL_API_KEY");
